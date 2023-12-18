@@ -96,7 +96,7 @@ export function useOptimisticStore() {
     return subscribe(update)
   }, [])
 
-  return state
+  return Array.from(state.values())
 }
 
 export function useOptimistic<T extends Action, R>(
