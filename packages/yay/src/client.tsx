@@ -23,6 +23,9 @@ function Status({ action }: { action: FormAction }) {
   const status = useFormStatus()
 
   useEffect(() => {
+    // `status.data` receives the latest formData.
+    // We update the args only when status is pending
+    // to get a fresh optimistic value.
     if (!status.pending) return
 
     upsert(action, (current) => ({
@@ -41,6 +44,9 @@ export const Form = forwardRef(function Form<Action extends FormAction>(
   ref: ForwardedRef<HTMLFormElement>,
 ) {
   const [data, formAction] = useFormState<ReturnType<Action> | null, FormData>(
+    // At the moment, `formStateProxy` is called after every action invocation
+    // in a sequential manner (ugh). We update the previous value and args
+    // when transitioning to pending state
     async function formStateProxy(prev, formData) {
       upsert(action, (current) => {
         if (current.state === "pending") return
@@ -58,6 +64,8 @@ export const Form = forwardRef(function Form<Action extends FormAction>(
   )
 
   useEffect(() => {
+    // `data` changes when the action transition is finished,
+    // so we resolve any pending state here.
     upsert(action, (current) => {
       if (current.state !== "pending") return
       return {
