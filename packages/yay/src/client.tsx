@@ -1,6 +1,6 @@
 "use client"
 
-import type { ComponentProps, ForwardedRef } from "react"
+import type { ComponentProps, ElementRef, ForwardedRef } from "react"
 import {
   forwardRef,
   useEffect,
@@ -41,7 +41,7 @@ function Status({ action }: { action: FormAction }) {
 
 export const Form = forwardRef(function Form<Action extends FormAction>(
   { action, children, ...props }: FormProps<Action>,
-  ref: ForwardedRef<HTMLFormElement>,
+  ref: ForwardedRef<ElementRef<"form">>,
 ) {
   const [data, formAction] = useFormState<ReturnType<Action> | null, FormData>(
     // At the moment, `formStateProxy` is called after every action invocation
