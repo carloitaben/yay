@@ -50,10 +50,13 @@ export const initialStatus: ActionDataInitial = {
 
 export function upsert<T extends Action>(
   action: T,
-  reducer: (current: ActionData<T>) => ActionData<T>,
+  reducer: (current: ActionData<T>) => ActionData<T> | void,
 ) {
-  store.set(action.name, reducer(get(action)))
-  window.dispatchEvent(event)
+  const value = reducer(get(action))
+  if (typeof value !== "undefined") {
+    store.set(action.name, value)
+    window.dispatchEvent(event)
+  }
 }
 
 export function get<T extends Action>(action: T): ActionData<T> {

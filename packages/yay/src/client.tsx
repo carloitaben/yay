@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
   useOptimistic as useReactOptimistic,
+  startTransition,
 } from "react"
 import { useFormState, useFormStatus } from "react-dom"
 import type { Action, ActionResult, FormAction } from "./lib"
@@ -22,14 +23,14 @@ function Status({ action }: { action: FormAction }) {
   const status = useFormStatus()
 
   useEffect(() => {
-    if (status.pending) {
-      upsert(action, (current) => ({
-        state: "pending",
-        args: [status.data],
-        data: null,
-        prev: current.prev,
-      }))
-    }
+    if (!status.pending) return
+
+    upsert(action, (current) => ({
+      state: "pending",
+      args: [status.data],
+      data: current.data,
+      prev: current.prev,
+    }))
   }, [action, status])
 
   return null
@@ -40,16 +41,25 @@ export const Form = forwardRef(function Form<Action extends FormAction>(
   ref: ForwardedRef<HTMLFormElement>,
 ) {
   const [data, formAction] = useFormState<ReturnType<Action> | null, FormData>(
-    (_, formData) => action(formData),
+    async function formStateProxy(prev, formData) {
+      upsert(action, (current) => {
+        if (current.state === "pending") return
+        return {
+          state: "pending",
+          args: [formData] as Parameters<Action>,
+          data: null,
+          prev: prev,
+        }
+      })
+
+      return action(formData)
+    },
     null,
   )
 
   useEffect(() => {
     upsert(action, (current) => {
-      if (current.state !== "pending") {
-        return current
-      }
-
+      if (current.state !== "pending") return
       return {
         state: "resolved",
         args: current.args,
@@ -81,10 +91,6 @@ export function useOptimisticStore() {
   return state
 }
 
-/**
- * hacer reducer opcional y si no hay reducer devolver payload de la store a pelo
- * hacer action opcional y si no hay action devolver store a pelo
- */
 export function useOptimistic<T extends Action, R>(
   action: T,
   reducer: (previous: ActionResult<T> | null, ...args: Parameters<T>) => R,
@@ -95,17 +101,20 @@ export function useOptimistic<T extends Action, R>(
   useEffect(() => {
     function update() {
       const data = get(action)
-
       switch (data.state) {
+        case "initial":
+          return setState(null)
         case "pending":
           return setOptimistic(reducer(data.prev, ...data.args))
         case "resolved":
-          return setState(reducer(data.prev, ...data.args))
+          const result = reducer(data.prev, ...data.args)
+          startTransition(() => setOptimistic(result))
+          return setState(result)
       }
     }
 
     return subscribe(update)
   }, [action, reducer, setOptimistic])
 
-  return optimistic || state
+  return optimistic
 }
