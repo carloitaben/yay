@@ -32,10 +32,10 @@ export type ActionData<T extends FormAction> =
   | ActionDataPending<T>
   | ActionDataResolved<T>
 
-export type ActionReducer<T extends Action> = (
-  prev: ActionData<T>["prev"],
+export type ActionReducer<T extends Action, R> = (
+  previous: ActionResult<T> | null,
   ...args: Parameters<T>
-) => ActionResult<T>
+) => R
 
 export const event = new CustomEvent("yay:notify")
 

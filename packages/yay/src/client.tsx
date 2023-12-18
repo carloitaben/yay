@@ -9,7 +9,7 @@ import {
   startTransition,
 } from "react"
 import { useFormState, useFormStatus } from "react-dom"
-import type { Action, ActionResult, FormAction } from "./lib"
+import type { Action, ActionReducer, FormAction } from "./lib"
 import { get, store, subscribe, upsert } from "./lib"
 
 export type FormProps<Action extends FormAction> = Omit<
@@ -101,7 +101,7 @@ export function useOptimisticStore() {
 
 export function useOptimistic<T extends Action, R>(
   action: T,
-  reducer: (previous: ActionResult<T> | null, ...args: Parameters<T>) => R,
+  reducer: ActionReducer<T, R>,
 ) {
   const [state, setState] = useState<R | null>(null)
   const [optimistic, setOptimistic] = useReactOptimistic<R | null>(state)
