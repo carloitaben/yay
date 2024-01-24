@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import Boundary from "~/components/Boundary"
 import Consumer from "~/components/Consumer"
+import Transition from "~/components/Transition"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -23,6 +24,7 @@ export default function RootLayout({
               <Boundary>{children}</Boundary>
             </Boundary>
           </Boundary>
+          <Transition />
         </Boundary>
       </body>
     </html>

@@ -7,54 +7,77 @@ import {
   useState,
   useOptimistic as useReactOptimistic,
   startTransition,
+  useTransition,
+  useCallback,
 } from "react"
 import { useFormState, useFormStatus } from "react-dom"
-import type { Action, ActionReducer, FormAction } from "./lib"
-import { get, store, subscribe, upsert } from "./lib"
+import type {
+  Action,
+  FormAction,
+  ActionData,
+  ActionReducer,
+  ActionResult,
+} from "./lib"
+import { subscribe, upsert, get, initialStatus } from "./lib"
 
-export type FormProps<Action extends FormAction> = Omit<
+export type OptimisticFormProps<Action extends FormAction> = Omit<
   ComponentProps<"form">,
   "action"
 > & {
   action: Action
 }
 
-function Status({ action }: { action: FormAction }) {
+function Status({
+  action,
+  data,
+}: {
+  action: FormAction
+  data: ReturnType<Action> | null
+}) {
   const status = useFormStatus()
 
   useEffect(() => {
-    // `status.data` receives the latest formData.
-    // We update the args only when status is pending
-    // to get a fresh optimistic value.
-    if (!status.pending) return
+    if (status.pending) {
+      // `status.data` receives the latest formData.
+      // We update the args only when status is pending
+      // to get a fresh optimistic value.
+      return upsert(action, () => ({
+        pending: true,
+        args: [status.data],
+        data: null,
+      }))
+    }
 
-    upsert(action, (current) => ({
-      state: "pending",
-      args: [status.data],
-      data: current.data,
-      prev: current.prev,
-    }))
-  }, [action, status])
+    upsert(action, (current) => {
+      if (!current.pending) return
+      return {
+        pending: false,
+        args: null,
+        data,
+      }
+    })
+  }, [action, data, status])
 
   return null
 }
 
-export const Form = forwardRef(function Form<Action extends FormAction>(
-  { action, children, ...props }: FormProps<Action>,
+export const OptimisticForm = forwardRef(function OptimisticForm<
+  Action extends FormAction,
+>(
+  { action, children, ...props }: OptimisticFormProps<Action>,
   ref: ForwardedRef<ElementRef<"form">>,
 ) {
   const [data, formAction] = useFormState<ReturnType<Action> | null, FormData>(
     // At the moment, `formStateProxy` is called after every action invocation
     // in a sequential manner (ugh). We update the previous value and args
     // when transitioning to pending state
-    async function formStateProxy(prev, formData) {
+    async function formStateProxy(_, formData) {
       upsert(action, (current) => {
-        if (current.state === "pending") return
+        if (current.pending) return
         return {
-          state: "pending",
+          pending: true,
           args: [formData] as Parameters<Action>,
           data: null,
-          prev: prev,
         }
       })
 
@@ -63,66 +86,86 @@ export const Form = forwardRef(function Form<Action extends FormAction>(
     null,
   )
 
-  useEffect(() => {
-    // `data` changes when the action transition is finished,
-    // so we resolve any pending state here.
-    upsert(action, (current) => {
-      if (current.state !== "pending") return
-      return {
-        state: "resolved",
-        args: current.args,
-        data: data,
-        prev: current.prev,
-      }
-    })
-  }, [action, data])
-
   return (
     <form {...props} ref={ref} action={formAction}>
       {children}
-      <Status action={action} />
+      <Status action={action} data={data} />
     </form>
   )
 })
 
-export function useOptimisticStore() {
-  const [state, setState] = useState(store)
+export function useOptimistic<T extends Action>(action: T): ActionData<T>
 
-  useEffect(() => {
-    function update() {
-      setState(new Map(store))
-    }
-
-    return subscribe(update)
-  }, [])
-
-  return Array.from(state.values())
-}
-
-export function useOptimistic<T extends Action, R>(
+export function useOptimistic<T extends Action>(
   action: T,
-  reducer: ActionReducer<T, R>,
+  reducer: ActionReducer<T>,
+): ActionResult<T> | null
+
+export function useOptimistic<T extends Action>(
+  action: T,
+  reducer?: ActionReducer<T>,
 ) {
-  const [state, setState] = useState<R | null>(null)
-  const [optimistic, setOptimistic] = useReactOptimistic<R | null>(state)
+  const [state, setState] = useState<null | ActionResult<T> | ActionData<T>>(
+    reducer ? null : initialStatus,
+  )
+
+  const [optimistic, setOptimistic] = useReactOptimistic<
+    null | ActionResult<T> | ActionData<T>
+  >(state)
 
   useEffect(() => {
     function update() {
-      const data = get(action)
-      switch (data.state) {
-        case "initial":
-          return setState(null)
-        case "pending":
-          return setOptimistic(reducer(data.prev, ...data.args))
-        case "resolved":
-          const result = reducer(data.prev, ...data.args)
-          startTransition(() => setOptimistic(result))
-          return setState(result)
+      const submission = get(action)
+
+      if (submission.pending) {
+        return setOptimistic(reducer ? reducer(...submission.args) : submission)
       }
+
+      const result = reducer ? submission.data : submission
+
+      startTransition(() => setOptimistic(result))
+      return setState(result)
     }
 
-    return subscribe(update)
+    return subscribe(action, update)
   }, [action, reducer, setOptimistic])
 
   return optimistic
+}
+
+export function useOptimisticTransition<T extends Action>(action: T) {
+  const [isPending, startTransition] = useTransition()
+
+  const actionProxy = useCallback(
+    async (...args: Parameters<T>) => {
+      upsert(action, () => ({
+        pending: true,
+        data: null,
+        args,
+      }))
+
+      const data = await action(...args)
+
+      upsert(action, () => ({
+        pending: false,
+        data,
+        args: null,
+      }))
+
+      return data
+    },
+    [action],
+  )
+
+  const call = useCallback(
+    (callback: (action: T) => void) => {
+      startTransition(async () => {
+        if (isPending) return
+        await callback(actionProxy)
+      })
+    },
+    [actionProxy, isPending],
+  )
+
+  return [isPending, call] as const
 }

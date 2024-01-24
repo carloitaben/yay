@@ -6,45 +6,48 @@ export type Action = ServerAction | FormAction
 
 export type ActionResult<T extends Action> = Awaited<ReturnType<T>>
 
-type ActionDataInitial = {
-  state: "initial"
-  args: null
-  prev: null
-  data: null
-}
-
 type ActionDataPending<T extends Action> = {
-  state: "pending"
+  pending: true
   args: Parameters<T>
-  prev: ActionResult<T> | null
   data: null
 }
 
-type ActionDataResolved<T extends Action> = {
-  state: "resolved"
-  args: Parameters<T>
-  prev: ActionResult<T> | null
+type ActionDataNotPending<T extends Action> = {
+  pending: false
+  args: null
   data: ActionResult<T> | null
 }
 
 export type ActionData<T extends FormAction> =
-  | ActionDataInitial
   | ActionDataPending<T>
-  | ActionDataResolved<T>
+  | ActionDataNotPending<T>
 
-export type ActionReducer<T extends Action, R> = (
-  previous: ActionResult<T> | null,
+export type ActionReducer<T extends Action> = (
   ...args: Parameters<T>
-) => R
+) => ActionResult<Action>
 
 export const event = new CustomEvent("yay:notify")
 
+
+const eventTarget = new EventTarget()
+
+export function subscribe(action: Action, callback: VoidFunction) {
+  const key = `${action.name}:update`
+  eventTarget.addEventListener(key, callback)
+  return function unsubscribe() {
+    eventTarget.removeEventListener(key, callback)
+  }
+}
+
+function update(action: Action) {
+  eventTarget.dispatchEvent(new CustomEvent(`${action.name}:update`))
+}
+
 export const store = new Map<string, ActionData<any>>()
 
-export const initialStatus: ActionDataInitial = {
-  state: "initial",
+export const initialStatus: ActionDataNotPending<any> = {
+  pending: false,
   args: null,
-  prev: null,
   data: null,
 }
 
@@ -55,15 +58,10 @@ export function upsert<T extends Action>(
   const value = reducer(get(action))
   if (typeof value !== "undefined") {
     store.set(action.name, value)
-    window.dispatchEvent(event)
+    update(action)
   }
 }
 
 export function get<T extends Action>(action: T): ActionData<T> {
   return store.get(action.name) || initialStatus
-}
-
-export function subscribe(callback: (...args: any[]) => any) {
-  window.addEventListener(event.type, callback)
-  return () => window.removeEventListener(event.type, callback)
 }
