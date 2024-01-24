@@ -4,10 +4,8 @@ Optimistic updates for RSC
 
 ## Installation
 
-This library has `zod` as a peer dependency.
-
 ```shell
-npm install yay zod
+npm install yay@npm:@carloitaben/yay
 ```
 
 ## Usage
