@@ -17,10 +17,10 @@ export default function Transition() {
       <button
         className=" bg-black text-white rounded px-2 py-1"
         onClick={() =>
-          startTransition(async (uppercase) => {
+          startTransition(async (action) => {
             const formData = new FormData()
             formData.set("text", "transition")
-            await uppercase(formData)
+            await action(formData)
           })
         }
         disabled={isPending}

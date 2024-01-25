@@ -16,15 +16,7 @@ npm install yay@npm:@carloitaben/yay
 "use server"
 
 export async function uppercaseify(formData: FormData) {
-  const text = formData.get("text")
-
-  if (!text) {
-    return {
-      error: "Missing text form value"
-    }
-  }
-
-  return text.toString().toUppercase()
+  return formData.get("text").toString()?.toUppercase()
 }
 ```
 
@@ -33,7 +25,11 @@ import { OptimisticForm } from "yay"
 import { uppercaseify } from "./actions"
 
 function Component() {
-  return <OptimisticForm action={uppercaseify} />
+  return (
+    <OptimisticForm action={uppercaseify}>
+      <input name="text" />
+    </OptimisticForm>
+  )
 }
 ```
 
@@ -54,7 +50,7 @@ function Consumer() {
 }
 ```
 
-You can also pass a reducer to the `useOptimistic` hook to derive the value:
+You can also pass a reducer to `useOptimistic` to derive the value:
 
 ```tsx
 import { useOptimistic } from "yay"
@@ -83,10 +79,10 @@ export default function Component() {
   return (
     <button
       onClick={() =>
-        startTransition(async (uppercase) => {
+        startTransition(async (action) => {
           const formData = new FormData()
           formData.set("text", "transition")
-          await uppercase(formData)
+          await action(formData)
         })
       }
       disabled={isPending}
